@@ -11,10 +11,12 @@
 #include <stdlib.h>
 #include <string>
 #include <sstream> 
+#include <ctime>  
 
 using namespace std;
 
 #define STUDENT_ID 7011745
+#define CHOWN_TO 7011745
 
 string GetStdoutFromCommand(string cmd) {
     string data; 
@@ -37,10 +39,15 @@ string GetStdoutFromCommand(string cmd) {
 int main() 
 {
     string pass; 
-    //string kInput;
+    struct stat permissions; 
     stringstream ss;
+    stringstream ss2;
     string data;
+    string data2; 
+    int timeDiff; 
+    string path = "sniff";
     string notAuth = "kinit: Preauthentication failed while getting initial credentials";
+    string sniffFound = "./sniff";
   
     if (getuid() != STUDENT_ID) 
     {
@@ -49,11 +56,9 @@ int main()
     }
     cout << "Please enter your password\n";
     cin >> pass; 
-    //kInput = "echo \'" + pass + "\' | kinit"; 
-    //system(kInput.c_str());
     
     ss << "echo \'" << pass << "\' | kinit";
-    //system(ss.str().c_str());
+    
     data = GetStdoutFromCommand(ss.str()); 
 
     if (data.find(notAuth) != string::npos) { 
@@ -62,7 +67,36 @@ int main()
     }
     else
 	cout << "Authorized!\n";
+    ss2 << "find . -name \'sniff\'";
+    data2 = GetStdoutFromCommand(ss2.str());
+    if (data2.find(sniffFound) == string::npos) {
+    cout << "Missing sniff in current directory" << endl;
+    return 0; 
+    }
 
+    stat(path.c_str(), &permissions); 
+         
+    if (permissions.st_uid != STUDENT_ID) {
+    cout << "You are not the owner of sniff.\n";
+    return 0;
+    }
+
+    if (!(permissions.st_mode & S_IXUSR) || permissions.st_mode & S_IRGRP || permissions.st_mode & S_IWGRP || permissions.st_mode & S_IXGRP || permissions.st_mode & S_IROTH || permissions.st_mode & S_IWOTH || permissions.st_mode & S_IXOTH) {
+	cout << "Either you do not have execute permissions on sniff or someone else who should not does\n";
+	return 0; 
+    }
+    
+    timeDiff =  time(NULL) - permissions.st_mtime; 
+    if (timeDiff > 60) {
+    cout << "File sniff was created or modified over 1 minute ago.\n";
+    return 0;
+    }
+	
+    if (chown(path.c_str(), CHOWN_TO, 95)) 
+    cout << "CHOWN could not change owner or group of the file.\n";
+    	
+    if (chmod(path.c_str(), 04550)) 
+    cout << "CHMOD could not change file permissions.\n";
     
     return 0;
 }
